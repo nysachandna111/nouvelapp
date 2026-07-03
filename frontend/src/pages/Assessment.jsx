@@ -63,14 +63,25 @@ export default function Assessment() {
       <div className="progress-track">
         <div className="progress-fill" style={{ width: `${((i + 1) / questions.length) * 100}%` }} />
       </div>
-      <div className="eyebrow">{i + 1} of {questions.length}</div>
-      <h2 style={{ marginBottom: 22 }}>{q.text}</h2>
-      <div>
-        {q.options.map((o) => (
-          <button key={o} className={`option${chosen === o ? ' active' : ''}`} onClick={() => choose(o)}>
-            {o}
-          </button>
-        ))}
+      {/* 01 Question Reveal — keyed to q.id so the stagger replays on each
+          new question. Counter/text/options fade up from 10px below. */}
+      <div key={q.id}>
+        <div className="eyebrow reveal-up" style={{ animationDelay: '100ms' }}>
+          Question {i + 1} of {questions.length}
+        </div>
+        <h2 className="reveal-up" style={{ marginBottom: 22, animationDelay: '200ms' }}>{q.text}</h2>
+        <div>
+          {q.options.map((o, idx) => (
+            <button
+              key={o}
+              className={`option reveal-up${chosen === o ? ' active' : ''}`}
+              style={{ animationDelay: `${300 + idx * 120}ms` }}
+              onClick={() => choose(o)}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="row" style={{ marginTop: 8 }}>
         {i > 0 && <button className="btn secondary" onClick={() => setI(i - 1)}>Back</button>}

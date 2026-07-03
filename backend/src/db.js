@@ -94,6 +94,48 @@ CREATE TABLE IF NOT EXISTS practice_completions (
 );
 `);
 
+// ---- Phase 2 migrations (add columns/tables to an existing DB in place) ----
+function ensureColumn(table, column, def) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+}
+// Journal entry: writing-mode + Phase 2 metadata (spec "Tip 1: update schema first").
+ensureColumn('journal_entries', 'mode', "TEXT NOT NULL DEFAULT 'standard'");
+ensureColumn('journal_entries', 'mood', 'TEXT');
+ensureColumn('journal_entries', 'recipient', 'TEXT');
+ensureColumn('journal_entries', 'dream_time', 'TEXT');
+// Personalization + AI privacy preferences on the user profile.
+ensureColumn('user_profiles', 'journal_cover', "TEXT NOT NULL DEFAULT 'celestial'");
+ensureColumn('user_profiles', 'journal_font', "TEXT NOT NULL DEFAULT 'georgia'");
+ensureColumn('user_profiles', 'ambient_sound', "TEXT NOT NULL DEFAULT 'silence'");
+ensureColumn('user_profiles', 'ai_opt_in', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('user_profiles', 'summary_time', "TEXT NOT NULL DEFAULT '19:00'");
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS prompt_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  prompt TEXT NOT NULL,
+  favorite INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS weekly_summaries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  summary TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS ai_patterns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  insight TEXT NOT NULL,
+  dismissed INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
 // ---- Seed practices (PRD §13 Practices) ----
 const practiceCount = db.prepare('SELECT COUNT(*) AS c FROM practices').get().c;
 if (practiceCount === 0) {

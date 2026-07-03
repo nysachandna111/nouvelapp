@@ -1,12 +1,21 @@
 :root {
-  --cream: #f6f1e9;
+  /* Ink & vine editorial palette (NOUVEL_HOME_DELIGHT_GUIDE.md) */
+  --cream: #f7f4ec;
   --cream-card: #fffdf9;
-  --charcoal: #2e2b27;
+  --charcoal: #2b2823;
   --charcoal-soft: #5b554d;
-  --sandalwood: #857861;
+  --sandalwood: #a4763a;
+  --gold: #c99a3f;
+  --sage: #9a8f5f;
+  --sage-light: #b7ab6c;
   --beige: #e9e0d2;
   --taupe: #b8ab97;
   --celestial: #c9d6e3;
+  /* Breathing light screen (BreathingLight_source.md) */
+  --breathe-bg: #151222;
+  --breathe-muted: #8d89a3;
+  --breathe-text: #b9b5cc;
+  --breathe-track: #2b2839;
   --shadow: 0 10px 40px rgba(133, 120, 97, 0.12);
   --radius: 22px;
 }
@@ -39,6 +48,11 @@ h1, h2, h3, .serif {
   display: flex;
   flex-direction: column;
   position: relative;
+}
+
+/* Logged-in screens: flat cream, no background wash (delight guide). */
+.app.theme-editorial {
+  background: var(--cream);
 }
 
 .screen {
@@ -148,6 +162,7 @@ textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
   border-top: 1px solid var(--beige);
   display: flex; justify-content: space-around;
   padding: 10px 4px calc(10px + env(safe-area-inset-bottom));
+  transition: opacity 650ms ease-in-out, transform 650ms ease-in-out;
 }
 .nav-item {
   background: none; display: flex; flex-direction: column; align-items: center;
@@ -195,3 +210,301 @@ textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
 /* Danger / destructive action (delete account) */
 .btn.danger { background: transparent; color: #a4503f; border: 1px solid #d8a99c; }
 .btn.danger:hover { background: rgba(164, 80, 63, 0.06); }
+
+/* =====================================================================
+   BEAUTIFUL MOMENTS — Interaction Design Spec (web adaptation)
+   Reanimated 2 specs translated to CSS animations. All movement-based
+   animations fall back to a 300ms opacity fade under Reduce Motion.
+   Nouvel Gold = #857861.
+   ===================================================================== */
+
+@keyframes moment-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes moment-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* 01 — Question Reveal (Assessment). Elements fade up from 10px below,
+   staggered by inline animation-delay. Fill mode both holds start+end. */
+.reveal-up {
+  opacity: 0;
+  animation: moment-fade-up 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 02 — Focus Area Reveal (Results). Cards flip in on the Y axis with
+   perspective + left-center origin, like turning over a card. */
+@keyframes card-flip-in {
+  from { opacity: 0; transform: perspective(300px) rotateY(-80deg); }
+  to   { opacity: 1; transform: perspective(300px) rotateY(0deg); }
+}
+.flip-card {
+  opacity: 0;
+  transform-origin: left center;
+  backface-visibility: hidden;
+  animation: card-flip-in 500ms ease-in-out both;
+}
+
+/* 03 — Writing Focus Mode (Journal). After ~20 chars the chrome slides/fades
+   away to create a distraction-free writing sanctuary; restores on blur. */
+.wf-header, .wf-prompt {
+  transition: opacity 650ms ease-in-out, transform 650ms ease-in-out;
+}
+body.writing-focus .wf-header { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+body.writing-focus .wf-prompt { opacity: 0; }
+body.writing-focus .bottom-nav { opacity: 0; transform: translate(-50%, 8px); pointer-events: none; }
+.journal-editor {
+  font-family: Georgia, 'Cormorant Garamond', serif;
+  font-size: 15pt;
+  line-height: 1.7;
+  color: var(--charcoal);
+  caret-color: #857861;
+}
+
+/* 04 — Golden Save Moment. Warm ripple expands from the button centre, then a
+   checkmark springs in with an elastic bounce before the button restores. */
+.save-wrap { position: relative; }
+.save-ripple {
+  position: absolute; left: 50%; top: 50%;
+  width: 40px; height: 40px; margin: -20px 0 0 -20px;
+  border-radius: 50%; background: #857861;
+  opacity: 0; pointer-events: none; z-index: 2;
+}
+.save-ripple.go { animation: golden-ripple 700ms ease-out forwards; }
+@keyframes golden-ripple {
+  from { transform: scale(0.3); opacity: 0.2; }
+  to   { transform: scale(5);   opacity: 0; }
+}
+.save-check {
+  position: absolute; left: 50%; top: 50%;
+  width: 30px; height: 30px; margin: -15px 0 0 -15px;
+  border-radius: 50%; background: #857861; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; transform: scale(0); z-index: 3; pointer-events: none;
+}
+.save-check.go { animation: check-spring 400ms cubic-bezier(.34, 1.56, .64, 1) 300ms forwards; }
+@keyframes check-spring { from { transform: scale(0); } to { transform: scale(1); } }
+.btn.is-saving { opacity: 0 !important; pointer-events: none; }
+
+/* 05 — Streak Celebration (Home). Gold sparks burst upward from the counter,
+   the number bounces with a spring, an italic affirmation fades in below. */
+.streak-stage { position: relative; }
+.streak-counter { display: inline-block; }
+.streak-counter.bounce { animation: streak-bounce 350ms cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes streak-bounce {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.spark {
+  position: absolute; top: 6px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #857861; opacity: 0; pointer-events: none;
+  animation: spark-rise 850ms ease-out forwards;
+}
+@keyframes spark-rise {
+  from { transform: translateY(0) scale(1);      opacity: 1; }
+  to   { transform: translateY(-34px) scale(0);  opacity: 0; }
+}
+.affirmation {
+  font-style: italic; color: var(--sandalwood); margin-top: 10px;
+  opacity: 0; animation: moment-fade 500ms ease 520ms forwards;
+}
+
+/* Accessibility: replace all movement with a simple 300ms opacity fade. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal-up, .flip-card, .affirmation {
+    animation: moment-fade 300ms ease both !important;
+    transform: none !important;
+  }
+  .save-ripple.go { animation: moment-fade 300ms ease forwards !important; }
+  .save-check.go  { animation: moment-fade 300ms ease forwards !important; transform: none !important; }
+  .spark { display: none !important; }
+  .streak-counter.bounce { animation: none !important; }
+  .wf-header, .wf-prompt, .bottom-nav { transition: opacity 300ms ease !important; }
+  body.writing-focus .wf-header, body.writing-focus .bottom-nav { transform: none !important; }
+  .calm-overlay, .stars span, .wave { animation: moment-fade 300ms ease forwards !important; }
+}
+
+/* =====================================================================
+   PHASE 2 — Personalization + Writing Modes UI
+   ===================================================================== */
+
+/* 🎨 Custom Journal Covers — decorative header on the Journal home */
+.cover-header {
+  position: relative; overflow: hidden;
+  border-radius: var(--radius); padding: 30px 22px 26px;
+  box-shadow: var(--shadow);
+}
+.cover-emoji { position: absolute; right: -8px; top: -14px; font-size: 104px; opacity: 0.28; }
+
+/* Writing mode picker grid */
+.mode-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
+.mode-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+  padding: 16px; border-radius: 18px; border: 1px solid var(--beige);
+  background: var(--cream-card); box-shadow: var(--shadow); transition: transform .15s, border-color .15s;
+}
+.mode-tile:hover { border-color: var(--taupe); transform: translateY(-1px); }
+.mode-ico { font-size: 24px; }
+.mode-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--charcoal); }
+.mode-tag { font-size: 12px; color: var(--taupe); line-height: 1.4; }
+
+/* Small pill controls: timer, chips, sound button */
+.timer-pill { font-size: 13px; color: var(--sandalwood); border: 1px solid var(--beige); border-radius: 999px; padding: 4px 12px; }
+.chip { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--beige); background: var(--cream-card); font-size: 13px; color: var(--charcoal-soft); transition: border-color .15s; }
+.chip:hover { border-color: var(--taupe); }
+.sound-btn { background: none; font-size: 18px; line-height: 1; }
+
+/* Loose, larger font for Brain Dump */
+.journal-editor.loose { font-size: 18pt; line-height: 1.8; letter-spacing: 0.3px; }
+
+/* 🌙 Dream Journal twilight theme (dim, deep-navy palette even in light mode) */
+.screen.twilight { background: linear-gradient(180deg, #0f1626 0%, #1c2740 100%); }
+.screen.twilight h1, .screen.twilight h2, .screen.twilight h3, .screen.twilight .serif { color: #e8e6df; }
+.screen.twilight p, .screen.twilight .muted, .screen.twilight label, .screen.twilight .eyebrow { color: #aeb8cf; }
+.screen.twilight .journal-editor { background: rgba(255,255,255,0.06); color: #eef1f6; border-color: rgba(255,255,255,0.16); caret-color: #c9d6e3; }
+.screen.twilight .chip, .screen.twilight select { background: rgba(255,255,255,0.08); color: #e8e6df; border-color: rgba(255,255,255,0.18); }
+.screen.twilight .link, .screen.twilight .btn.secondary { color: #c9d6e3; }
+
+/* Bottom sheets (mood/tag selector, sound tray) */
+.sheet-backdrop {
+  position: fixed; inset: 0; z-index: 70; background: rgba(46,43,39,0.42);
+  display: flex; align-items: flex-end; justify-content: center; animation: moment-fade 200ms ease;
+}
+.sheet {
+  width: 100%; max-width: 460px; background: var(--cream-card);
+  border-radius: 24px 24px 0 0; padding: 18px 22px calc(24px + env(safe-area-inset-bottom));
+  box-shadow: 0 -10px 40px rgba(0,0,0,0.16); animation: sheet-up 300ms cubic-bezier(0.22,1,0.36,1);
+  max-height: 88vh; overflow-y: auto;
+}
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+.sheet-grip { width: 40px; height: 4px; border-radius: 2px; background: var(--taupe); margin: 0 auto 14px; }
+
+/* Mood emoji grid (post-save) */
+.mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.mood-emoji {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px;
+  border-radius: 14px; border: 1px solid var(--beige); background: var(--cream-card);
+  font-size: 11px; color: var(--charcoal-soft);
+}
+.mood-emoji.active { border-color: var(--sandalwood); background: var(--beige); }
+
+/* Ambient sound tray */
+.sound-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.sound-item {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px;
+  border: 1px solid var(--beige); background: var(--cream-card); color: var(--charcoal); font-size: 15px;
+}
+.sound-item.active { border-color: var(--sandalwood); background: var(--beige); }
+.sound-ico { font-size: 20px; }
+.wave { color: var(--sandalwood); letter-spacing: 1px; font-size: 12px; animation: wave-pulse 1s ease-in-out infinite; }
+@keyframes wave-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+/* "Fades to calm" (Brain Dump) + Gratitude celebration overlays */
+.calm-overlay {
+  position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+  background: var(--cream); color: var(--sandalwood);
+  font-family: 'Cormorant Garamond', serif; font-size: 28px; letter-spacing: 2px;
+  opacity: 0; animation: calm-fade 900ms ease forwards;
+}
+@keyframes calm-fade { from { opacity: 0; } to { opacity: 1; } }
+.calm-overlay.celebrate { flex-direction: column; gap: 16px; background: #fffdf9; }
+.stars { display: flex; gap: 12px; font-size: 26px; color: var(--sandalwood); }
+.stars span { opacity: 0; animation: spark-rise 900ms ease-out forwards; }
+
+/* Profile > Personalize controls */
+.cover-pick { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 8px; }
+.cover-swatch {
+  height: 74px; border-radius: 14px; position: relative; overflow: hidden;
+  border: 2px solid transparent; display: flex; align-items: flex-end; padding: 8px; font-size: 12px; cursor: pointer;
+}
+.cover-swatch.active { border-color: var(--charcoal); }
+.font-option {
+  padding: 12px 16px; border-radius: 14px; border: 1px solid var(--beige); background: var(--cream-card);
+  margin-bottom: 8px; width: 100%; text-align: left; font-size: 17px; color: var(--charcoal);
+}
+.font-option.active { border-color: var(--sandalwood); background: var(--beige); }
+
+/* Simple toggle switch (AI privacy opt-in) */
+.switch { position: relative; width: 46px; height: 26px; flex: none; }
+.switch input { display: none; }
+.switch .track { position: absolute; inset: 0; border-radius: 999px; background: var(--beige); transition: background .2s; }
+.switch .thumb { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .2s; }
+.switch input:checked + .track { background: var(--sandalwood); }
+.switch input:checked + .track + .thumb { transform: translateX(20px); }
+
+/* =====================================================================
+   Interactive Practices — guided step player (dark breathe theme)
+   ===================================================================== */
+.screen.screen--breathe {
+  background: var(--breathe-bg);
+  margin: -28px -24px -96px;
+  padding: 28px 24px 96px;
+  min-height: 100vh;
+}
+.screen.screen--breathe h1,
+.screen.screen--breathe h2,
+.screen.screen--breathe h3,
+.screen.screen--breathe .serif,
+.screen.screen--breathe .practice-step { color: #fff; }
+.screen.screen--breathe p,
+.screen.screen--breathe .muted { color: var(--breathe-text); }
+.screen.screen--breathe .eyebrow { color: var(--breathe-muted); }
+.screen.screen--breathe .link { color: var(--breathe-text); }
+.screen.screen--breathe .btn { background: #4a4462; color: #fff; }
+.screen.screen--breathe .btn.secondary {
+  background: transparent;
+  color: #fff;
+  border-color: #4a4462;
+}
+.screen.screen--breathe .btn.gold { background: #f0997b; color: #151222; }
+.screen.screen--breathe .practice-dots .dot { background: var(--breathe-track); }
+.screen.screen--breathe .practice-dots .dot.on { background: #f0997b; }
+.screen.screen--breathe .breath-circle {
+  background: radial-gradient(circle, rgba(240, 153, 123, 0.55), rgba(127, 119, 221, 0.4));
+}
+.screen.screen--breathe .breath-label { color: var(--breathe-muted); }
+.screen.screen--breathe .step-timer { background: var(--breathe-track); }
+.screen.screen--breathe .step-timer-bar { background: rgba(240, 153, 123, 0.45); }
+.screen.screen--breathe .step-timer span { color: var(--breathe-text); }
+.screen.screen--breathe .center-done .done-check { background: #7f77dd; }
+
+.player { min-height: 70vh; display: flex; flex-direction: column; }
+.player-body { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; padding: 20px 0; animation: fade 0.4s ease; }
+.player-body .btn { max-width: 320px; margin-left: auto; margin-right: auto; }
+.player-body .row { justify-content: center; }
+.player-body .row .btn { width: auto; min-width: 120px; }
+
+.practice-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 18px; }
+.practice-dots .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--beige); transition: background .3s; }
+.practice-dots .dot.on { background: var(--sandalwood); }
+.practice-step { font-size: 24px; color: var(--charcoal); margin: 18px auto; max-width: 340px; line-height: 1.4; animation: moment-fade-up 400ms ease both; }
+
+/* Breathing pacer */
+.breath-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; margin: 10px 0 6px; }
+.breath-circle {
+  width: 120px; height: 120px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(240, 153, 123, 0.45), rgba(127, 119, 221, 0.3));
+  transition: transform ease-in-out; will-change: transform;
+}
+.breath-label { letter-spacing: 3px; text-transform: uppercase; font-size: 12px; color: var(--sandalwood); }
+
+/* Per-step "sit with this" timer */
+.step-timer { position: relative; height: 34px; border-radius: 999px; background: var(--beige); overflow: hidden; max-width: 260px; margin: 4px auto 0; display: flex; align-items: center; justify-content: center; }
+.step-timer-bar { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(133,120,97,0.35); transition: width 1s linear; }
+.step-timer span { position: relative; font-size: 13px; color: var(--charcoal-soft); letter-spacing: 1px; }
+
+/* Completion */
+.center-done .done-check {
+  width: 72px; height: 72px; border-radius: 50%; background: var(--sandalwood); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 34px; margin: 0 auto 18px;
+  animation: check-spring 500ms cubic-bezier(.34,1.56,.64,1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breath-circle { transition: none !important; }
+  .practice-step, .center-done .done-check { animation: moment-fade 300ms ease both !important; transform: none !important; }
+}

@@ -17,6 +17,8 @@ import {
   reflectOnEntry,
   guideReply,
   weeklySummary,
+  patternInsight,
+  conversationToEntry,
 } from './services/llm.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -111,16 +113,30 @@ export function createApp() {
   });
 
   app.put('/api/profile', requireAuth, (req, res) => {
-    const { age_range, life_season, intention, guidance_style, name } = req.body || {};
+    const {
+      age_range, life_season, intention, guidance_style, name,
+      journal_cover, journal_font, ambient_sound, ai_opt_in, summary_time,
+    } = req.body || {};
     if (name) db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, req.user.id);
     db.prepare(
       `UPDATE user_profiles
        SET age_range = COALESCE(?, age_range),
            life_season = COALESCE(?, life_season),
            intention = COALESCE(?, intention),
-           guidance_style = COALESCE(?, guidance_style)
+           guidance_style = COALESCE(?, guidance_style),
+           journal_cover = COALESCE(?, journal_cover),
+           journal_font = COALESCE(?, journal_font),
+           ambient_sound = COALESCE(?, ambient_sound),
+           ai_opt_in = COALESCE(?, ai_opt_in),
+           summary_time = COALESCE(?, summary_time)
        WHERE user_id = ?`
-    ).run(age_range ?? null, life_season ?? null, intention ?? null, guidance_style ?? null, req.user.id);
+    ).run(
+      age_range ?? null, life_season ?? null, intention ?? null, guidance_style ?? null,
+      journal_cover ?? null, journal_font ?? null, ambient_sound ?? null,
+      ai_opt_in === undefined ? null : ai_opt_in ? 1 : 0,
+      summary_time ?? null,
+      req.user.id
+    );
     res.json({ profile: getProfile(req.user.id) });
   });
 
@@ -203,27 +219,87 @@ export function createApp() {
     res.json({ focusAreas: latestFocusAreas(req.user.id) });
   });
 
-  // ---------------- Prompts ----------------
+  // ---------------- Prompts (Phase 2: Personalized Prompts) ----------------
   app.get('/api/prompt/daily', requireAuth, async (req, res) => {
     const profile = getProfile(req.user.id);
     const focusAreas = latestFocusAreas(req.user.id);
-    const recent = db
-      .prepare('SELECT tags FROM journal_entries WHERE user_id = ? ORDER BY id DESC LIMIT 5')
-      .all(req.user.id)
-      .map((r) => r.tags)
-      .filter(Boolean);
-    const prompt = await generatePrompt({ profile, focusAreas, recentThemes: recent });
-    res.json({ prompt });
+
+    // Stable within a day, fresh each new day: reuse today's first prompt unless
+    // the user explicitly asks for a different one (refresh).
+    if (!req.query.refresh) {
+      const cached = db
+        .prepare("SELECT prompt FROM prompt_history WHERE user_id = ? AND favorite = 0 AND date(created_at) = date('now') ORDER BY id ASC LIMIT 1")
+        .get(req.user.id);
+      if (cached) return res.json({ prompt: cached.prompt, ai: Boolean(profile.ai_opt_in) && aiEnabled() });
+    }
+
+    // Feed the model THIS user's own recent entries so tomorrow's prompt is
+    // tailored to them (only when they've opted in to AI reading their entries).
+    const rows = db
+      .prepare('SELECT journal_text, tags, mood FROM journal_entries WHERE user_id = ? ORDER BY id DESC LIMIT 5')
+      .all(req.user.id);
+    const recentThemes = rows.map((r) => r.tags).filter(Boolean);
+    const recentEntries = profile.ai_opt_in
+      ? rows.slice(0, 3).map((r) => ({ text: r.journal_text, mood: r.mood }))
+      : [];
+    const daySeed = Math.floor(Date.now() / 86400000) + (req.query.refresh ? Number(req.query.refresh) || 0 : 0);
+
+    const prompt = await generatePrompt({
+      profile,
+      focusAreas,
+      recentThemes,
+      recentEntries,
+      aiAllowed: Boolean(profile.ai_opt_in),
+      daySeed,
+    });
+    db.prepare('INSERT INTO prompt_history (user_id, prompt) VALUES (?, ?)').run(req.user.id, prompt);
+    res.json({ prompt, ai: Boolean(profile.ai_opt_in) && aiEnabled() });
+  });
+
+  // Save / list favorite prompts and browse past prompts.
+  app.post('/api/prompt/favorite', requireAuth, (req, res) => {
+    const { prompt } = req.body || {};
+    if (!prompt || !String(prompt).trim())
+      return res.status(400).json({ error: 'Prompt cannot be empty.' });
+    db.prepare('INSERT INTO prompt_history (user_id, prompt, favorite) VALUES (?, ?, 1)')
+      .run(req.user.id, prompt);
+    res.status(201).json({ ok: true });
+  });
+
+  app.get('/api/prompt/favorites', requireAuth, (req, res) => {
+    res.json({
+      prompts: db
+        .prepare('SELECT DISTINCT prompt FROM prompt_history WHERE user_id = ? AND favorite = 1 ORDER BY id DESC LIMIT 50')
+        .all(req.user.id)
+        .map((r) => r.prompt),
+    });
+  });
+
+  app.get('/api/prompt/history', requireAuth, (req, res) => {
+    res.json({
+      prompts: db
+        .prepare('SELECT DISTINCT prompt FROM prompt_history WHERE user_id = ? ORDER BY id DESC LIMIT 30')
+        .all(req.user.id)
+        .map((r) => r.prompt),
+    });
   });
 
   // ---------------- Journal (PRD Screen 11) ----------------
   app.get('/api/journal', requireAuth, (req, res) => {
-    const { theme, favorite } = req.query;
+    const { theme, favorite, mode, mood } = req.query;
     let sql = 'SELECT * FROM journal_entries WHERE user_id = ?';
     const args = [req.user.id];
     if (theme) {
       sql += ' AND tags LIKE ?';
       args.push(`%${theme}%`);
+    }
+    if (mode) {
+      sql += ' AND mode = ?';
+      args.push(mode);
+    }
+    if (mood) {
+      sql += ' AND mood = ?';
+      args.push(mood);
     }
     if (favorite === 'true') sql += ' AND favorite = 1';
     sql += ' ORDER BY id DESC';
@@ -231,12 +307,19 @@ export function createApp() {
   });
 
   app.post('/api/journal', requireAuth, async (req, res) => {
-    const { prompt_text, journal_text, mood_before, mood_after, tags, reflect } = req.body || {};
+    const {
+      prompt_text, journal_text, mood_before, mood_after, tags, reflect,
+      mode, mood, recipient, dream_time,
+    } = req.body || {};
     if (!journal_text || !String(journal_text).trim())
       return res.status(400).json({ error: 'Journal entry cannot be empty.' });
 
+    // AI reflection is gated behind the Privacy opt-in (Phase 2: "AI opt-in is
+    // not optional"). Even if the client asks to reflect, we never send entry
+    // text to the model unless the user has explicitly allowed it.
+    const profile = getProfile(req.user.id);
     let ai_reflection = null;
-    if (reflect) {
+    if (reflect && profile.ai_opt_in) {
       ai_reflection = await reflectOnEntry({
         entryText: journal_text,
         focusAreas: latestFocusAreas(req.user.id),
@@ -244,8 +327,9 @@ export function createApp() {
     }
     const info = db
       .prepare(
-        `INSERT INTO journal_entries (user_id, prompt_text, journal_text, mood_before, mood_after, tags, ai_reflection)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO journal_entries
+         (user_id, prompt_text, journal_text, mood_before, mood_after, tags, ai_reflection, mode, mood, recipient, dream_time)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         req.user.id,
@@ -254,7 +338,11 @@ export function createApp() {
         mood_before ?? null,
         mood_after ?? null,
         tags ?? null,
-        ai_reflection
+        ai_reflection,
+        mode || 'standard',
+        mood ?? null,
+        recipient ?? null,
+        dream_time ?? null
       );
     res.status(201).json({ entry: db.prepare('SELECT * FROM journal_entries WHERE id = ?').get(info.lastInsertRowid) });
   });
@@ -267,6 +355,27 @@ export function createApp() {
     const next = entry.favorite ? 0 : 1;
     db.prepare('UPDATE journal_entries SET favorite = ? WHERE id = ?').run(next, entry.id);
     res.json({ favorite: Boolean(next) });
+  });
+
+  // Update mood/tags after saving (Entry Moods & Tags post-save selector).
+  app.patch('/api/journal/:id', requireAuth, (req, res) => {
+    const entry = db
+      .prepare('SELECT * FROM journal_entries WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.user.id);
+    if (!entry) return res.status(404).json({ error: 'Entry not found.' });
+    const { mood, tags } = req.body || {};
+    db.prepare('UPDATE journal_entries SET mood = COALESCE(?, mood), tags = COALESCE(?, tags) WHERE id = ?')
+      .run(mood ?? null, tags ?? null, entry.id);
+    res.json({ entry: db.prepare('SELECT * FROM journal_entries WHERE id = ?').get(entry.id) });
+  });
+
+  // Delete an entry ("Burn it" release ritual in Brain Dump mode).
+  app.delete('/api/journal/:id', requireAuth, (req, res) => {
+    const info = db
+      .prepare('DELETE FROM journal_entries WHERE id = ? AND user_id = ?')
+      .run(req.params.id, req.user.id);
+    if (info.changes === 0) return res.status(404).json({ error: 'Entry not found.' });
+    res.json({ ok: true });
   });
 
   // ---------------- Practices (PRD Screen 13) ----------------
@@ -355,6 +464,68 @@ export function createApp() {
       .all(req.user.id);
     const summary = await weeklySummary({ entries, focusAreas: latestFocusAreas(req.user.id) });
     res.json({ summary });
+  });
+
+  // ---------------- Weekly AI Summary storage (Profile > My Summaries) --------
+  app.post('/api/summaries/generate', requireAuth, async (req, res) => {
+    const profile = getProfile(req.user.id);
+    if (!profile.ai_opt_in)
+      return res.status(403).json({ error: 'Enable AI in Settings > Privacy first.' });
+    const entries = db
+      .prepare("SELECT journal_text FROM journal_entries WHERE user_id = ? AND created_at >= datetime('now', '-7 days') ORDER BY id DESC")
+      .all(req.user.id);
+    const summary = await weeklySummary({ entries, focusAreas: latestFocusAreas(req.user.id) });
+    const info = db
+      .prepare('INSERT INTO weekly_summaries (user_id, summary) VALUES (?, ?)')
+      .run(req.user.id, summary);
+    res.status(201).json({ summary, id: Number(info.lastInsertRowid) });
+  });
+
+  app.get('/api/summaries', requireAuth, (req, res) => {
+    res.json({
+      summaries: db
+        .prepare('SELECT id, summary, created_at FROM weekly_summaries WHERE user_id = ? ORDER BY id DESC LIMIT 30')
+        .all(req.user.id),
+    });
+  });
+
+  // ---------------- Pattern Recognition (Home "Patterns" card) ----------------
+  app.get('/api/patterns', requireAuth, async (req, res) => {
+    const profile = getProfile(req.user.id);
+    if (!profile.ai_opt_in) return res.json({ insight: null, reason: 'ai-off' });
+
+    const entries = db
+      .prepare('SELECT journal_text, mood, mood_after, created_at FROM journal_entries WHERE user_id = ? ORDER BY id DESC LIMIT 30')
+      .all(req.user.id);
+    if (entries.length < 5) return res.json({ insight: null, reason: 'too-few', needed: 5, have: entries.length });
+
+    // Serve a cached, non-dismissed insight if generated within the last 7 days.
+    const cached = db
+      .prepare("SELECT * FROM ai_patterns WHERE user_id = ? AND dismissed = 0 AND created_at >= datetime('now','-7 days') ORDER BY id DESC LIMIT 1")
+      .get(req.user.id);
+    if (cached && !req.query.regenerate)
+      return res.json({ insight: cached.insight, id: cached.id });
+
+    const insight = await patternInsight({ entries });
+    const info = db.prepare('INSERT INTO ai_patterns (user_id, insight) VALUES (?, ?)').run(req.user.id, insight);
+    res.json({ insight, id: Number(info.lastInsertRowid) });
+  });
+
+  app.post('/api/patterns/:id/dismiss', requireAuth, (req, res) => {
+    db.prepare('UPDATE ai_patterns SET dismissed = 1 WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+    res.json({ ok: true });
+  });
+
+  // ---------------- Conversation Mode: synthesize dialogue into an entry ------
+  app.post('/api/ai/conversation/save', requireAuth, async (req, res) => {
+    const { history } = req.body || {};
+    if (!Array.isArray(history) || history.length === 0)
+      return res.status(400).json({ error: 'Nothing to save yet.' });
+    const journal_text = await conversationToEntry({ history });
+    const info = db
+      .prepare("INSERT INTO journal_entries (user_id, journal_text, mode) VALUES (?, ?, 'conversation')")
+      .run(req.user.id, journal_text);
+    res.status(201).json({ entry: db.prepare('SELECT * FROM journal_entries WHERE id = ?').get(info.lastInsertRowid) });
   });
 
   // ---- Serve the built React SPA (production / single-URL deploy) ----

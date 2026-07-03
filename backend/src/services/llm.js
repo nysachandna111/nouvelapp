@@ -107,32 +107,78 @@ Return EXACTLY 3 focus areas. Each title is 3-6 words. Each desc is 1-2 warm sen
 }
 
 // A single personalized journaling prompt.
-export async function generatePrompt({ profile, focusAreas, recentThemes = [], mood = null }) {
+export async function generatePrompt({
+  profile,
+  focusAreas,
+  recentThemes = [],
+  recentEntries = [],
+  mood = null,
+  aiAllowed = true,
+  daySeed = 0,
+}) {
   const primary = focusAreas?.[0]?.title || 'self-awareness';
-  if (!hasKey()) {
+  // Static curated bank — used when AI is unavailable OR the user has not opted
+  // in to AI (Phase 2: "Fallback to a curated static prompt bank").
+  if (!hasKey() || !aiAllowed) {
     const pool = [
       `Where in your life are you craving more emotional safety, clarity, or truth — and what would change if you honored that need today?`,
       `Thinking about ${primary.toLowerCase()}: what is one small, honest step you could take this week?`,
       `What feeling has been asking for your attention lately, and what might it be trying to protect?`,
       `If the next version of you were writing today's entry, what would they want you to remember?`,
+      `What are you ready to release, and what would lightness feel like in its place?`,
+      `Name one thing you're quietly proud of. Why does it matter to you?`,
+      `What did today ask of you, and where did you meet it with grace?`,
+      `Is there something you've been avoiding putting into words? What would it say if you let it?`,
+      `When did you last feel fully yourself — and what conditions helped that feeling arrive?`,
+      `What boundary, if honored today, would give you more room to breathe?`,
+      `Describe a moment this week when you chose yourself. What made that possible?`,
+      `What story about yourself are you ready to outgrow?`,
+      `If your body could speak right now, what would it ask for?`,
+      `What would "enough" look like for you today — not someday, but today?`,
+      `Who or what are you grateful for that you rarely mention out loud?`,
+      `What emotion keeps visiting you — and what is its wisest message?`,
+      `Where are you performing instead of being honest, and what would authenticity cost you?`,
+      `What would you do differently if you trusted that you belong here?`,
+      `Name a fear that has been running quietly in the background. What is it protecting?`,
+      `What does rest actually look like for you — not productivity in disguise?`,
+      `If you could send one sentence of compassion to your younger self, what would it say?`,
+      `What pattern keeps repeating, and what is it trying to teach you?`,
+      `What would change if you stopped waiting to feel ready?`,
+      `Where in your life do you need more softness — toward yourself or toward someone else?`,
+      `What truth about ${primary.toLowerCase()} feels tender but necessary to name today?`,
+      `What are you carrying that was never yours to hold?`,
+      `Describe the kind of day your future self would thank you for choosing.`,
+      `What need have you been meeting indirectly — through busyness, pleasing, or control?`,
+      `When you imagine feeling at peace, what is the first small detail you notice?`,
+      `What would it mean to treat yourself with the same patience you offer others?`,
+      `What is one thing you know in your gut but haven't fully admitted yet?`,
+      `If today were a chapter title in your story, what would it be — and why?`,
     ];
-    // Deterministic pick based on number of recent themes so it varies over time.
-    return pool[recentThemes.length % pool.length];
+    // Seeded by the day so the prompt CHANGES every day, nudged by recent themes.
+    const idx = (daySeed + recentThemes.length + (mood ? String(mood).length : 0)) % pool.length;
+    return pool[idx];
   }
   try {
+    // Learn from the individual: summarize their own recent writing so tomorrow's
+    // prompt speaks to where they actually are (spec: send summaries, not full text).
+    const recentText = recentEntries
+      .map((e, i) => `Entry ${i + 1}${e.mood ? ` (felt ${e.mood})` : ''}: ${String(e.text || '').replace(/\s+/g, ' ').slice(0, 240)}`)
+      .join('\n');
     return await chat(
       [
         {
           role: 'user',
-          content: `Write ONE journaling prompt (1-2 sentences) for this user.
+          content: `Write ONE fresh journaling prompt (1-2 sentences) tailored to THIS person, so it never feels generic.
 Profile: ${JSON.stringify(profile)}.
 Top focus area: ${primary}.
-Recent journal themes: ${recentThemes.join(', ') || 'none yet'}.
-Current mood: ${mood || 'unknown'}.
+Recurring themes/tags: ${recentThemes.join(', ') || 'none yet'}.
+Their recent entries (learn what's alive for them, then gently move them forward — do not just repeat it back):
+${recentText || 'No entries yet.'}
+Time context: day #${daySeed} — make it different from a typical prompt.
 Return only the prompt text, no quotes.`,
         },
       ],
-      { maxTokens: 120 }
+      { maxTokens: 140 }
     );
   } catch (err) {
     console.error('generatePrompt LLM error, using fallback:', err.message);
@@ -143,23 +189,23 @@ Return only the prompt text, no quotes.`,
 // A short reflection after a journal entry (PRD §7 Feature 4 optional AI).
 export async function reflectOnEntry({ entryText, focusAreas = [] }) {
   if (!hasKey()) {
-    return `Your entry shows a desire for more honesty and alignment. A powerful next step may be naming what you need before trying to make others comfortable.`;
+    return `I notice a theme of honesty and alignment in what you wrote. There's a tenderness here too — a wish to be fully yourself. What would it feel like to honor that need before making others comfortable?`;
   }
   try {
     return await chat(
       [
         {
           role: 'user',
-          content: `Reflect back the themes in this journal entry in 2-3 warm sentences. Offer one gentle next step. Do not diagnose.
+          content: `You are a compassionate journaling companion. Read this entry and respond in 3-5 sentences: briefly name one theme you noticed, one emotion that seems present, and ask one gentle, open-ended question to sit with. Do not give advice. Do not solve problems. Just reflect.
 Focus areas: ${focusAreas.map((f) => f.title).join(', ')}.
 Entry: """${entryText}"""`,
         },
       ],
-      { maxTokens: 180 }
+      { maxTokens: 200 }
     );
   } catch (err) {
     console.error('reflectOnEntry LLM error, using fallback:', err.message);
-    return `Thank you for being honest with yourself. Notice what feels most alive in what you wrote, and let that guide one small step today.`;
+    return `I notice a theme of wanting to be honest with yourself, and a quiet courage underneath it. What is one thing you're ready to acknowledge today?`;
   }
 }
 
@@ -183,6 +229,61 @@ export async function guideReply({ message, history = [], profile, focusAreas = 
   } catch (err) {
     console.error('guideReply LLM error, using fallback:', err.message);
     return `I'm here with you. Tell me a little more about what's present for you right now.`;
+  }
+}
+
+// Pattern Recognition (Phase 2 AI). One caring observation across recent entries.
+export async function patternInsight({ entries = [] }) {
+  if (!hasKey()) {
+    const moods = entries.map((e) => e.mood || e.mood_after).filter(Boolean);
+    const common = moods.length ? moods.sort((a, b) =>
+      moods.filter((m) => m === b).length - moods.filter((m) => m === a).length)[0] : null;
+    return common
+      ? `Something I've noticed in your writing lately: the word "${common}" keeps surfacing. It may be asking for a little more of your attention.`
+      : `Something I've noticed: you keep returning to the page. That consistency itself is a quiet form of self-respect.`;
+  }
+  try {
+    const text = entries
+      .map((e) => `- (${(e.created_at || '').slice(0, 10)}) ${(e.journal_text || '').slice(0, 220)}`)
+      .join('\n')
+      .slice(0, 3500);
+    return await chat(
+      [
+        {
+          role: 'user',
+          content: `Read these recent journal entries and name ONE emotional or thematic pattern in 1-2 warm sentences. Begin with "Something I've noticed in your writing lately". Be caring, not clinical. No advice.\n${text}`,
+        },
+      ],
+      { maxTokens: 160 }
+    );
+  } catch (err) {
+    console.error('patternInsight LLM error, using fallback:', err.message);
+    return `Something I've noticed in your writing lately: you keep returning to the page, and that steadiness matters.`;
+  }
+}
+
+// Conversation Mode (Phase 2 AI). Synthesize a dialogue into a flowing entry.
+export async function conversationToEntry({ history = [] }) {
+  const transcript = history
+    .map((h) => `${h.role === 'ai' ? 'Guide' : 'Me'}: ${h.content}`)
+    .join('\n');
+  if (!hasKey()) {
+    return history.filter((h) => h.role !== 'ai').map((h) => h.content).join('\n\n')
+      || 'Today I sat with my thoughts and let them surface.';
+  }
+  try {
+    return await chat(
+      [
+        {
+          role: 'user',
+          content: `Turn this reflective conversation into a flowing first-person journal entry (2-3 short paragraphs). Keep the user's voice and feelings; drop the question/answer format.\n\n${transcript}`,
+        },
+      ],
+      { maxTokens: 400 }
+    );
+  } catch (err) {
+    console.error('conversationToEntry LLM error, using fallback:', err.message);
+    return history.filter((h) => h.role !== 'ai').map((h) => h.content).join('\n\n');
   }
 }
 

@@ -18,7 +18,7 @@ import AIGuide from './pages/AIGuide.jsx';
 import Progress from './pages/Progress.jsx';
 import Profile from './pages/Profile.jsx';
 
-// Routes that show the bottom navigation.
+// Routes that show the bottom navigation (editorial cream theme).
 const NAV_PATHS = ['/home', '/journal', '/practices', '/guide', '/profile', '/progress'];
 
 function Protected({ children }) {
@@ -30,9 +30,10 @@ function Protected({ children }) {
 export default function App() {
   const location = useLocation();
   const showNav = NAV_PATHS.includes(location.pathname);
+  const editorial = NAV_PATHS.includes(location.pathname);
 
   return (
-    <div className="app">
+    <div className={`app${editorial ? ' theme-editorial' : ''}`}>
       <Routes>
         <Route path="/" element={<Splash />} />
         <Route path="/welcome" element={<Welcome />} />

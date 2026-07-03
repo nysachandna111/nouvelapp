@@ -20,20 +20,22 @@ export default function Results() {
 
   return (
     <div className="screen">
-      <div className="eyebrow">Your reflection</div>
-      <h1>Your Current Self-Mastery Focus</h1>
-      <p style={{ marginBottom: 24 }}>
+      {/* 02 Focus Area Reveal — header + sub-header fade up, then each focus
+          area flips into view like turning over a card. CTA fades up last. */}
+      <div className="eyebrow reveal-up" style={{ animationDelay: '0ms' }}>Your reflection</div>
+      <h1 className="reveal-up" style={{ animationDelay: '0ms' }}>Your Current Self-Mastery Focus</h1>
+      <p className="reveal-up" style={{ marginBottom: 24, animationDelay: '100ms' }}>
         Based on your answers, Nouvel has identified the areas that may support your next level
         of growth, clarity, and emotional alignment.
       </p>
       {areas.map((a, idx) => (
-        <div key={idx} className="focus">
+        <div key={idx} className="focus flip-card" style={{ animationDelay: `${200 + idx * 220}ms` }}>
           <h3>{idx + 1}. {a.title}</h3>
           <p>{a.desc}</p>
         </div>
       ))}
-      <button className="btn" onClick={() => navigate('/first-prompt')}>Begin My First Prompt</button>
-      <button className="btn secondary" onClick={() => navigate('/home')}>Save My Results</button>
+      <button className="btn reveal-up" style={{ animationDelay: '900ms' }} onClick={() => navigate('/first-prompt')}>Begin My First Prompt</button>
+      <button className="btn secondary reveal-up" style={{ animationDelay: '900ms' }} onClick={() => navigate('/home')}>Save My Results</button>
     </div>
   );
 }
