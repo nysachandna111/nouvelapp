@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import BottomNav from './components/BottomNav.jsx';
+import InstallHint from './components/InstallHint.jsx';
 
 import Splash from './pages/Splash.jsx';
 import Welcome from './pages/Welcome.jsx';
@@ -34,6 +35,7 @@ export default function App() {
 
   return (
     <div className={`app${editorial ? ' theme-editorial' : ''}`}>
+      <InstallHint />
       <Routes>
         <Route path="/" element={<Splash />} />
         <Route path="/welcome" element={<Welcome />} />

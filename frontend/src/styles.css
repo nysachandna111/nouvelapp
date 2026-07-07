@@ -70,6 +70,25 @@ h1, h2, h3, .serif {
 }
 @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+/* iPhone install hint (Add to Home Screen) */
+.install-hint {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin: -28px -24px 16px;
+  padding: 12px 16px;
+  background: var(--charcoal);
+  color: var(--cream);
+  font-size: 13px;
+  line-height: 1.45;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.install-hint p { color: var(--cream); margin: 0; flex: 1; }
+.install-hint .link { color: var(--gold); text-decoration: none; flex: none; white-space: nowrap; }
+
 .eyebrow { letter-spacing: 3px; text-transform: uppercase; font-size: 11px; color: var(--sandalwood); margin-bottom: 14px; }
 .logo { font-family: 'Cormorant Garamond', serif; font-size: 40px; letter-spacing: 4px; color: var(--charcoal); }
 h1 { font-size: 30px; line-height: 1.25; margin-bottom: 12px; }
